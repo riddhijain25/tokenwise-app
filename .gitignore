@@ -6,7 +6,6 @@ public/
 
 # IDE
 .idea/
-.vscode/
 
 # Environment
 .env
