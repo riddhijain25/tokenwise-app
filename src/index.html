@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TokenWise</title>
+  <meta name="description" content="Token usage inspector for Gemini models">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <button id="newChatBtn" class="new-chat-btn" type="button">New chat</button>
+      <div id="chatList" class="chat-list"></div>
+    </aside>
+
+    <div class="app-wrapper">
+      <header class="app-header">
+        <div class="header-left">
+          <h1 class="app-title">TokenWise</h1>
+          <div class="model-picker">
+            <select id="modelSelect" aria-label="Select Gemini model" disabled>
+              <option value="">Loading models...</option>
+            </select>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="session-counter">
+            <span class="session-label">Session tokens</span>
+            <span id="sessionTotal" class="session-count">0</span>
+          </div>
+        </div>
+      </header>
+
+      <main id="messageList" class="message-list" role="log" aria-live="polite">
+        <div class="empty-state">Send a prompt to inspect token consumption.</div>
+      </main>
+
+      <footer class="composer-container">
+        <form id="composerForm" class="composer-card">
+          <textarea id="promptInput" class="composer-textarea" placeholder="Send a prompt..." rows="3"
+            aria-label="Prompt input" autocomplete="off" data-gramm="false" disabled></textarea>
+          <div class="composer-actions">
+            <div id="scoreContainer" class="score-container" aria-live="polite">
+              <span id="routeBadge" class="route-badge"></span>
+              <span id="liveTokenCount" class="live-token-count"></span>
+              <span id="scoreBadge" class="score-badge"></span>
+              <span id="scoreIssues" class="score-issues"></span>
+            </div>
+            <div class="composer-buttons">
+              <button id="optimizeBtn" type="button" class="optimize-btn" disabled>Optimize</button>
+              <button id="sendBtn" type="submit" class="send-btn" disabled>Send</button>
+            </div>
+          </div>
+        </form>
+      </footer>
+    </div>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+
+</html>
