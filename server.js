@@ -15,7 +15,7 @@ const auth = new GoogleAuth({
 
 // The publisher list returns 133 entries including embedding, image, video,
 // audio and robotics models. None of those belong in a chat dropdown.
-const EXCLUDE_RE = /embedding|image|tts|audio|transcribe|veo|imagen|lyria|robotics|computer-use|banana|guard|live|native-audio/i;
+const EXCLUDE_RE = /embedding|image|tts|audio|transcribe|veo|imagen|lyria|robotics|computer-use|banana|guard|live|native-audio|omni/i;
 
 let modelCache = null;
 

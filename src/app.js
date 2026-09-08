@@ -1,4 +1,5 @@
 import * as scoring from './scoring.js';
+import * as telemetry from './telemetry.js';
 
 (function () {
   const modelSelect = document.getElementById('modelSelect');
@@ -187,7 +188,6 @@ import * as scoring from './scoring.js';
     chats = chats.filter(c => c.id !== id);
     persistChats();
 
-    // If the open chat was deleted, fall back to the next one or start fresh
     if (activeChatId === id) {
       if (chats.length) openChat(chats[0].id);
       else newChat();
@@ -298,11 +298,12 @@ import * as scoring from './scoring.js';
     if (!activeChat()) newChat();
     const chat = activeChat();
 
+    // Captured before the composer is cleared
+    const scoreAtSend = scoring.scorePrompt(prompt);
+
     const empty = messageList.querySelector('.empty-state');
     if (empty) empty.remove();
 
-    // Routing runs on whatever is in the composer at send time. If the user
-    // clicked Optimise first, that is the optimised text.
     let routeReason = null;
     if (model === 'auto') {
       const route = scoring.routeModel(prompt, rawModelsList);
@@ -318,6 +319,8 @@ import * as scoring from './scoring.js';
       { role: 'user', parts: [{ text: x.prompt }] },
       { role: 'model', parts: [{ text: x.reply }] }
     ]));
+
+    const turnIndex = chat.exchanges.length;
 
     const exchangeEl = document.createElement('div');
     exchangeEl.className = 'exchange';
@@ -398,10 +401,31 @@ import * as scoring from './scoring.js';
       sessionTotalEl.textContent = sessionTokens.toLocaleString();
 
       recordExchange(prompt, data.reply || '', html, totalTok);
+
+      telemetry.recordSend({
+        chat_id: chat.id,
+        turn_index: turnIndex,
+        model_requested: modelSelect.value,
+        model_used: model,
+        route_reason: routeReason,
+        final_score: scoreAtSend.scored ? scoreAtSend.score : null,
+        final_tokens: scoreAtSend.tokens ?? null,
+        prompt_chars: prompt.length,
+        issues_at_send: scoreAtSend.issues || [],
+        constraint_present: !!scoreAtSend.hasFormat,
+        tokens_new: typeof newTok === 'number' ? newTok : null,
+        tokens_history: histTok,
+        tokens_in: inTok,
+        tokens_out: outTok,
+        tokens_thinking: typeof thinkTok === 'number' ? thinkTok : null,
+        tokens_total: totalTok
+      });
     } catch (err) {
       console.error('Chat request error:', err);
       modelContent.innerHTML =
         `<div class="model-error">Error: ${escapeHtml(err.message)}</div>`;
+      // Nothing was consumed, so no record is written
+      telemetry.discardPending();
     } finally {
       isRequestInFlight = false;
       promptInput.disabled = false;
@@ -431,6 +455,7 @@ import * as scoring from './scoring.js';
     if (!text) { clearScoreUI(); return; }
 
     const res = scoring.scorePrompt(text);
+    telemetry.beginPrompt(res);
 
     liveTokenCount.style.display = 'inline-block';
     liveTokenCount.textContent = `~${res.tokens || 0} tokens`;
@@ -487,6 +512,8 @@ import * as scoring from './scoring.js';
     const opt = scoring.optimise(text);
     if (!opt.changed) return;
 
+    telemetry.markOptimised();
+
     // Writing through execCommand preserves the browser's undo stack, so
     // Ctrl+Z restores the original. Assigning to .value directly wipes it.
     promptInput.focus();
@@ -523,6 +550,7 @@ import * as scoring from './scoring.js';
 
   adjustTextareaHeight();
   clearScoreUI();
+  telemetry.installConsoleHelpers();
   loadChats();
   if (chats.length) openChat(chats[0].id); else newChat();
   loadModels();

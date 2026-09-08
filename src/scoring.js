@@ -86,7 +86,10 @@ const SPEC_MARKERS = [
 // single result in that comparison.
 const ENUMERATIVE_RE = /\b(plan|planning|roadmap|steps?|stages?|phases?|order|sequence|checklist|options?|ideas?|ways?|approaches?|recommendations?|tips?)\b/i;
 
-const MIN_TOKENS = 30;
+// 30 was too high — "explain cloud computing" is six tokens and produced a
+// 1,015-word answer unbounded, which is exactly the case worth catching.
+// 12 catches short conceptual prompts without scoring fragments mid-typing.
+const MIN_TOKENS = 12;
 const FILLER_W = 2.2;
 const FORMAT_PEN = 18;
 const DENSITY_SOFT = 6.0;
@@ -354,6 +357,12 @@ export function optimise(text, divisor = 4.25) {
       full model merely wastes some thinking. The errors are not symmetric.
 --------------------------------------------------------------------------- */
 
+// Used only if the model list is empty or the fetch failed. Routing normally
+// selects from whatever the publisher endpoint returned, so a retired model
+// disappears without a code change.
+const FALLBACK_LITE = { name: 'gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite' };
+const FALLBACK_FULL = { name: 'gemini-3.6-flash', displayName: 'Gemini 3.6 Flash' };
+
 // Positive evidence of a lookup, transform, greeting or short generative task
 const ROUTE_LITE_RE = new RegExp(
   '^\\s*(say|greet|translate|rephrase|paraphrase|reword|correct|fix|spell|' +
@@ -378,12 +387,12 @@ const ROUTE_CODE_RE = /```|[{};]\s*$|\b(def|function|class|return|import|const|l
 export function routeModel(text, availableModels = []) {
   const raw = (text || '').trim();
 
-  const lite = availableModels.find(m => m.name.toLowerCase().includes('flash-lite'))
-    || { name: 'gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite' };
-
-  const full = availableModels.find(m => m.name === 'gemini-3.6-flash')
-    || availableModels.find(m => m.name.includes('flash') && !m.name.includes('lite'))
-    || { name: 'gemini-3.6-flash', displayName: 'Gemini 3.6 Flash' };
+  // Pick by tier from whatever is currently available, not by version.
+  // The list arrives sorted newest first, so this selects the newest model
+  // of each tier and survives any single version being retired.
+  const flash = availableModels.filter(m => /flash/i.test(m.name));
+  const lite = flash.find(m => /lite/i.test(m.name)) || FALLBACK_LITE;
+  const full = flash.find(m => !/lite/i.test(m.name)) || FALLBACK_FULL;
 
   const pick = (m, tier, reason) => ({
     tier, modelName: m.name, displayName: m.displayName, reason
