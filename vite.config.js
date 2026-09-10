@@ -10,6 +10,10 @@ export default defineConfig({
     proxy: {
       '/chat': 'http://localhost:3000',
       '/models': 'http://localhost:3000',
+      '/update-profile': 'http://localhost:3000',
+      '/get-profile': 'http://localhost:3000',
+      '/get-current-user': 'http://localhost:3000',
+      '/telemetry': 'http://localhost:3000',
     },
   },
 });

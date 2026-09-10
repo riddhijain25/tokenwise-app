@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - TokenWise</title>
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #311042 100%);
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            padding: 2.5rem;
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            text-align: center;
+        }
+
+        .logo-area h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-area p {
+            color: var(--text-muted);
+            font-size: 0.90rem;
+            margin-bottom: 1.8rem;
+        }
+
+        /* Hidden by default; revealed only for first-time users */
+        #setupSection {
+            display: none;
+            text-align: left;
+            margin-bottom: 1.5rem;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .input-group {
+            margin-bottom: 1.2rem;
+        }
+
+        .input-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.4rem;
+        }
+
+        .input-group input,
+        .input-group select {
+            width: 100%;
+            padding: 0.75rem 0.9rem;
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            color: white;
+            font-size: 0.95rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus,
+        .input-group select:focus {
+            border-color: var(--accent);
+        }
+
+        .input-group select option {
+            background: #1e293b;
+            color: white;
+        }
+
+        .btn-action {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background: #ffffff;
+            color: #1e293b;
+            border: none;
+            border-radius: 12px;
+            padding: 0.8rem 1rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-action:hover {
+            background: #f1f5f9;
+            transform: translateY(-1px);
+        }
+
+        .btn-action.primary {
+            background: var(--accent);
+            color: white;
+        }
+
+        .btn-action.primary:hover {
+            background: var(--accent-hover);
+        }
+
+        .btn-action svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        #errorMsg {
+            color: #f87171;
+            font-size: 0.85rem;
+            margin-top: 1rem;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="login-container">
+        <div class="logo-area">
+            <h1>TokenWise</h1>
+            <p id="subtitleText">Sign in to manage token caps & analytics</p>
+        </div>
+
+        <!-- First-Time Setup Section (Hidden initially) -->
+        <div id="setupSection">
+            <div class="input-group">
+                <label for="usernameInput">Username <span style="color:#f87171">*</span></label>
+                <input type="text" id="usernameInput" required placeholder="e.g. riddhijain">
+            </div>
+
+            <div class="input-group">
+                <label for="orgInput">Organization</label>
+                <input type="text" id="orgInput" placeholder="Leave blank to default to 'acme'">
+            </div>
+
+            <div class="input-group">
+                <label for="deptSelect">Department</label>
+                <select id="deptSelect">
+                    <option value="sales">Sales</option>
+                    <option value="product">Product</option>
+                    <option value="engineering" selected>Engineering</option>
+                    <option value="marketing">Marketing</option>
+                    <option value="customer-support">Customer Support</option>
+                    <option value="finance">Finance</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Main Action Button -->
+        <button id="actionBtn" class="btn-action">
+            <svg viewBox="0 0 24 24">
+                <path fill="#4285F4"
+                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z" />
+                <path fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.13 0-5.78-2.11-6.73-4.96H1.19v3.15C3.17 21.31 7.25 24 12 24z" />
+                <path fill="#FBBC05"
+                    d="M5.27 14.24c-.25-.72-.38-1.49-.38-2.24s.13-1.52.38-2.24V6.61H1.19C4.33 9.4 4.33 14.6 1.19 17.39l3.88-3.15z" />
+                <path fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.25 0 3.17 2.69 1.19 6.61l4.08 3.15c.95-2.85 3.6-4.96 6.73-4.96z" />
+            </svg>
+            Sign in with Google
+        </button>
+
+        <div id="errorMsg"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { firebaseConfig } from "/firebase-config.js";
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const errorMsg = document.getElementById('errorMsg');
+        const orgInput = document.getElementById('orgInput');
+        const deptSelect = document.getElementById('deptSelect');
+        const setupSection = document.getElementById('setupSection');
+        const subtitleText = document.getElementById('subtitleText');
+        const actionBtn = document.getElementById('actionBtn');
+
+        let cachedAuthToken = null;
+        let isAwaitingSetup = false;
+
+        function showError(text) {
+            errorMsg.textContent = text;
+            errorMsg.style.display = 'block';
+        }
+
+        actionBtn.addEventListener('click', async () => {
+            try {
+                errorMsg.style.display = 'none';
+
+                if (isAwaitingSetup) {
+                    await submitNewUserSetup();
+                    return;
+                }
+
+                const provider = new GoogleAuthProvider();
+                const result = await signInWithPopup(auth, provider);
+                const token = await result.user.getIdToken();
+                cachedAuthToken = token;
+
+                // Call backend profile route safely
+                const checkRes = await fetch('/update-profile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ checkOnly: true })
+                });
+
+                // SAFETY FIX: Read as text first to prevent 'Unexpected end of JSON' crash
+                const responseText = await checkRes.text();
+                const checkData = responseText ? JSON.parse(responseText) : {};
+
+                if (checkData.exists) {
+                    window.location.href = '/';
+                } else {
+                    isAwaitingSetup = true;
+                    setupSection.style.display = 'block';
+                    subtitleText.textContent = "Welcome! Please set up your workspace profile.";
+
+                    actionBtn.classList.add('primary');
+                    actionBtn.innerHTML = 'Complete Setup & Enter';
+                }
+            } catch (err) {
+                showError(err.message);
+            }
+        });
+
+        async function submitNewUserSetup() {
+            try {
+                const username = document.getElementById('usernameInput').value.trim();
+                if (!username) {
+                    showError('Please provide a username.');
+                    return;
+                }
+
+                const org_id = orgInput.value.trim() || 'acme';
+                const dept_id = deptSelect.value;
+
+                const res = await fetch('/update-profile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${cachedAuthToken}`
+                    },
+                    body: JSON.stringify({ username, org_id, dept_id, checkOnly: false })
+                });
+
+                const responseText = await res.text();
+                const data = responseText ? JSON.parse(responseText) : {};
+
+                if (res.ok) {
+                    window.location.href = '/';
+                } else {
+                    // THIS WILL SHOW THE REAL ERROR INSTEAD OF A GENERIC MESSAGE
+                    throw new Error(data.error || `Server error code ${res.status}`);
+                }
+            } catch (err) {
+                showError(err.message);
+            }
+        }
+    </script>
+</body>
+
+</html>

@@ -30,8 +30,6 @@ const POLITE = [
   "if you don't mind", 'i was wondering', 'i was hoping', 'kindly'
 ];
 
-// Words meaning roughly the same thing. Two from one group inside a single
-// and/or run is padding, not specification.
 const SYNONYM_GROUPS = [
   ['options', 'alternatives', 'choices', 'possibilities'],
   ['thoughts', 'ideas', 'suggestions', 'opinions', 'views', 'input'],
@@ -60,7 +58,6 @@ SYNONYM_GROUPS.forEach((group, i) => {
   for (const w of group) SYN_INDEX.set(w, i);
 });
 
-// Declared before CONSTRAINT_RE so the two cannot drift apart
 const EXPANSION_RE = /\b(in depth|in detail|comprehensive|exhaustive|thorough|elaborate|detailed)\b/i;
 
 const CONSTRAINT_RE = [
@@ -81,14 +78,8 @@ const SPEC_MARKERS = [
   'with ', 'using', 'based on'
 ];
 
-// Tasks where a numbered structure bounds output better than a word count.
-// Measured: "four bullet points" gave -68% on a planning prompt, the best
-// single result in that comparison.
 const ENUMERATIVE_RE = /\b(plan|planning|roadmap|steps?|stages?|phases?|order|sequence|checklist|options?|ideas?|ways?|approaches?|recommendations?|tips?)\b/i;
 
-// 30 was too high — "explain cloud computing" is six tokens and produced a
-// 1,015-word answer unbounded, which is exactly the case worth catching.
-// 12 catches short conceptual prompts without scoring fragments mid-typing.
 const MIN_TOKENS = 12;
 const FILLER_W = 2.2;
 const FORMAT_PEN = 18;
@@ -102,9 +93,6 @@ function esc(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Requires the and/or pattern, so a word repeated across separate sentences
-// never fires. Requires two words from one group, so a list of distinct
-// criteria never fires.
 function synonymRuns(text) {
   const runs = text.toLowerCase().match(/\b[a-z]{4,}(?:\s+(?:and|or)\s+[a-z]{4,})+/g) || [];
   const found = [];
@@ -122,8 +110,6 @@ function synonymRuns(text) {
   return found;
 }
 
-// Counts each region of filler once. Without this, "could you please help me"
-// would be counted twice, since "could you please" also matches inside it.
 function fillerCharsIn(lower) {
   const claimed = [];
   let total = 0;
@@ -154,29 +140,24 @@ export function scorePrompt(text, divisor = 4.25) {
   const issues = [];
   let penalty = 0;
 
-  // 1. Filler phrases
   const fillerChars = fillerCharsIn(lower);
   if (fillerChars > 0) {
     penalty += Math.ceil(fillerChars / divisor) * FILLER_W;
     issues.push('Filler phrases');
   }
 
-  // 2. Politeness density
   const politeCount = POLITE.reduce((n, p) => n + (lower.split(p).length - 1), 0);
   if (politeCount >= 3) {
     penalty += Math.min(15, (politeCount - 2) * 1.5);
     issues.push('Over-polite');
   }
 
-  // 3. Output constraint — measured as the driver of response length
   const hasFormat = CONSTRAINT_RE.some(re => re.test(raw));
   if (!hasFormat) {
     penalty += FORMAT_PEN;
     issues.push('No output constraint');
   }
 
-  // 4. Intent density — grammatical signals via wink, inputs capped so
-  //    padding cannot inflate apparent intent
   const doc = nlp.readDoc(raw);
   const pos = doc.tokens().out(its.pos);
 
@@ -212,7 +193,6 @@ export function scorePrompt(text, divisor = 4.25) {
     if (frac > 0.45) issues.push('Verbose for the ask');
   }
 
-  // 5. Redundant synonyms
   const redundant = synonymRuns(raw);
   if (redundant.length > 0) {
     penalty += Math.min(SYN_CAP, redundant.length * SYN_W);
@@ -232,8 +212,6 @@ export function localRewrite(text, divisor = 4.25) {
   let out = (text || '').replace(/\s+/g, ' ').trim();
   const removed = [];
 
-  // Sentence-initial filler phrases only. Mid-sentence removal would leave
-  // broken grammar, so those cases are left alone.
   for (const phrase of FILLER) {
     const re = new RegExp('(^|[.!?]\\s+)' + esc(phrase) + '\\s*', 'gi');
     if (re.test(out)) {
@@ -242,8 +220,6 @@ export function localRewrite(text, divisor = 4.25) {
     }
   }
 
-  // Words with no grammatical role. Replace with a space, not nothing,
-  // or adjacent words fuse together.
   for (const w of SAFE_ANYWHERE) {
     const re = new RegExp('(^|\\s+)' + esc(w) + '\\b', 'gi');
     if (re.test(out)) {
@@ -264,10 +240,6 @@ export function localRewrite(text, divisor = 4.25) {
   return { text: out, removed, before, after, changed: out !== (text || '').trim() };
 }
 
-// Measured: a bare word bound cut total consumption 32-58% across five
-// prompts, mean -46%. A fixed 300 was too small for a heavily specified
-// prompt and impossible for a creative brief, so the bound scales with
-// the intent the engine computes.
 export function suggestConstraint(text, divisor = 4.25, intent = null) {
   const raw = (text || '').replace(/\s+/g, ' ').trim();
 
@@ -275,8 +247,6 @@ export function suggestConstraint(text, divisor = 4.25, intent = null) {
     return { applicable: false, reason: 'Constraint already present' };
   }
 
-  // Depth explicitly requested — bound generously rather than not at all,
-  // since an unbounded response is where consumption runs away
   if (EXPANSION_RE.test(raw)) {
     const suffix = ' Keep the response under 1500 words.';
     return {
@@ -287,7 +257,6 @@ export function suggestConstraint(text, divisor = 4.25, intent = null) {
 
   const i = intent === null ? 5 : intent;
 
-  // Planning and enumeration bound better with a count than a word limit
   if (ENUMERATIVE_RE.test(raw)) {
     const n = i < 4 ? 4 : i < 10 ? 5 : 6;
     const suffix = ` Answer as ${n} bullet points.`;
@@ -338,35 +307,20 @@ export function optimise(text, divisor = 4.25) {
 }
 
 /* ---------------------------------------------------------------------------
-   Model routing
-
-   Measured: the same six-token prompt cost 480 tokens on a full model
-   (mean of four runs, 467 of them thinking) and 13 tokens on a lite model,
-   which reported no thinking at all. A 37x difference for an identical
-   visible answer.
-
-   Two principles, both learned from testing:
-
-   1. Length does not indicate difficulty. "Explain cloud computing" is six
-      tokens and needs a substantive answer. An earlier version routed on
-      token count and misrouted five of ten conceptual prompts.
-
-   2. Default up, downgrade only on positive evidence of triviality. A hard
-      prompt sent to the cheap model produces a poor answer and the user
-      re-prompts, costing more than was saved. An easy prompt sent to the
-      full model merely wastes some thinking. The errors are not symmetric.
+   Model routing (Hardcoded 3-Tier Hierarchy)
+   
+   - Light/Basic  -> gemini-2.5-flash-lite
+   - Medium/Standard -> gemini-2.5-flash
+   - Complex/Heavy   -> gemini-3.8-flash
 --------------------------------------------------------------------------- */
 
-// Used only if the model list is empty or the fetch failed. Routing normally
-// selects from whatever the publisher endpoint returned, so a retired model
-// disappears without a code change.
-const FALLBACK_LITE = { name: 'gemini-3.1-flash-lite', displayName: 'Gemini 3.1 Flash Lite' };
-const FALLBACK_FULL = { name: 'gemini-3.6-flash', displayName: 'Gemini 3.6 Flash' };
+const MODEL_LITE = { name: 'gemini-2.5-flash-lite', displayName: 'Gemini 2.5 Flash Lite' };
+const MODEL_MEDIUM = { name: 'gemini-2.5-flash', displayName: 'Gemini 2.5 Flash' };
+const MODEL_COMPLEX = { name: 'gemini-3.8-flash', displayName: 'Gemini 3.8 Flash' };
 
-// Positive evidence of a lookup, transform, greeting or short generative task
 const ROUTE_LITE_RE = new RegExp(
   '^\\s*(say|greet|translate|rephrase|paraphrase|reword|correct|fix|spell|' +
-  'capitalis|capitaliz|format|convert)\\b' +
+  'capitalis|capitaliz|format|convert|summaris|summariz|compose|draft)\\b' +
   '|^\\s*(hi|hey|hello|thanks|thank you|good (morning|afternoon|evening))\\b' +
   '|^\\s*how (are|is) (you|it going|things)\\b' +
   '|\\b(what|who|when|where) (is|are|was|were) the\\b' +
@@ -375,51 +329,49 @@ const ROUTE_LITE_RE = new RegExp(
   '|\\b(haiku|limerick|joke|rhyme|acronym)\\b', 'i'
 );
 
-// Anything asking for mechanism, judgement, or comparison
-const ROUTE_CONCEPTUAL_RE = /\b(explain|describe|compare|contrast|analyse|analyze|assess|evaluate|critique|justify|why|how does|how do|how can|how would|what causes|what happens|difference|differences|trade-?offs?|pros and cons|advantages|implications?|consequences?|should i|best way|recommend|overview)\b/i;
-
-const ROUTE_NUMERIC_RE = /\d+\s*(mph|kmh|km|miles?|kg|lbs?|%|percent|degrees?|minutes?|hours?|days?|weeks?|years?|dollars?|usd|eur|gbp|inr)\b/i;
-
-const ROUTE_MULTISTEP_RE = /\b(and then|after that|given that|assuming|calculate|how (long|many|much|far|fast))\b/i;
-
-const ROUTE_CODE_RE = /```|[{};]\s*$|\b(def|function|class|return|import|const|let|var|public|void|regex|sql|select|insert|update|delete|endpoint|git|bash|docker|npm|async|await)\b/i;
+const ROUTE_COMPLEX_RE = /\b(explain|compare|contrast|analyse|analyze|assess|evaluate|critique|justify|derivation|algorithm|architecture|refactor|debug|optimize|trade-?offs?|pros and cons)\b/i;
+const ROUTE_NUMERIC_RE = /\b(calculate|compute|solve|equation|integral|probability|statistics|\d+\s*(mph|kmh|km|miles?|kg|lbs?|%|percent|degrees?|minutes?|hours?|days?|weeks?|years?|dollars?|usd|eur|gbp|inr))\b/i;
+const ROUTE_MULTISTEP_RE = /\b(and then|after that|given that|assuming)\b/i;
+const ROUTE_CODE_RE = /```|[\r\n]\s*[\{\}\;]\s*$|\b(def\s+|function\s+|class\s+|import\s+|const\s+|let\s+|async\s+await)\b/i;
 
 export function routeModel(text, availableModels = []) {
   const raw = (text || '').trim();
+  const models = Array.isArray(availableModels) ? availableModels : [];
 
-  // Pick by tier from whatever is currently available, not by version.
-  // The list arrives sorted newest first, so this selects the newest model
-  // of each tier and survives any single version being retired.
-  const flash = availableModels.filter(m => /flash/i.test(m.name));
-  const lite = flash.find(m => /lite/i.test(m.name)) || FALLBACK_LITE;
-  const full = flash.find(m => !/lite/i.test(m.name)) || FALLBACK_FULL;
+  // Helper to find the matching model object from the live dropdown list, 
+  // or gracefully fallback to our hardcoded definition if not found.
+  const getModel = (targetName, fallback) => {
+    return models.find(m => m && m.name === targetName) || fallback;
+  };
+
+  const liteModel = getModel('gemini-2.5-flash-lite', MODEL_LITE);
+  const mediumModel = getModel('gemini-2.5-flash', MODEL_MEDIUM);
+  const complexModel = getModel('gemini-3.8-flash', MODEL_COMPLEX);
 
   const pick = (m, tier, reason) => ({
-    tier, modelName: m.name, displayName: m.displayName, reason
+    tier,
+    modelName: m.name,
+    displayName: m.displayName || m.name,
+    reason
   });
 
-  if (!raw) return pick(lite, 'lite', 'Empty prompt');
+  if (!raw) return pick(liteModel, 'lite', 'Empty prompt');
 
   const tokens = Math.ceil(raw.length / 4.25);
 
-  // Difficulty first — a short prompt can still need reasoning
-  if (ROUTE_NUMERIC_RE.test(raw) || ROUTE_MULTISTEP_RE.test(raw)) {
-    return pick(full, 'reasoning', 'Quantitative or multi-step');
-  }
+  // --- 1. COMPLEX TASKS (-> 3.8 Flash) ---
   if (ROUTE_CODE_RE.test(raw)) {
-    return pick(full, 'reasoning', 'Code or technical');
+    return pick(complexModel, 'complex-flash', 'Technical code structure detected');
   }
-  if (ROUTE_CONCEPTUAL_RE.test(raw)) {
-    return pick(full, 'reasoning', 'Conceptual or comparative');
-  }
-  if (tokens > 60) {
-    return pick(full, 'reasoning', 'Extended context');
+  if (ROUTE_COMPLEX_RE.test(raw) || ROUTE_NUMERIC_RE.test(raw) || ROUTE_MULTISTEP_RE.test(raw) || tokens > 300) {
+    return pick(complexModel, 'complex-flash', 'Complex reasoning, math, or large context');
   }
 
-  // Only then fall through to the cheap tier
-  if (ROUTE_LITE_RE.test(raw)) {
-    return pick(lite, 'lite', 'Lookup or transform');
+  // --- 2. LIGHT / BASIC TASKS (-> 2.5 Flash-Lite) ---
+  if (ROUTE_LITE_RE.test(raw) || tokens < 20) {
+    return pick(liteModel, 'lite', 'Basic lookup, short input, or text fix');
   }
 
-  return pick(full, 'reasoning', 'No trivial signal, defaulting up');
+  // --- 3. MEDIUM / STANDARD TASKS (-> 2.5 Flash) ---
+  return pick(mediumModel, 'medium-flash', 'Standard generation workload');
 }

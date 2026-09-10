@@ -27,6 +27,11 @@
           </div>
         </div>
         <div class="header-right">
+          <!-- User Profile Hover Icon Container -->
+          <div id="userProfileBadge" class="user-profile-badge" style="display: none;">
+            <div class="user-avatar-icon">👤</div>
+            <div id="usernameTooltip" class="username-tooltip">Loading...</div>
+          </div>
           <div class="session-counter">
             <span class="session-label">Session tokens</span>
             <span id="sessionTotal" class="session-count">0</span>
@@ -58,6 +63,21 @@
       </footer>
     </div>
   </div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { firebaseConfig } from "./firebase-config.js";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+
+    onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        // Not logged in -> Kick to login page
+        window.location.href = '/login.html';
+      }
+    });
+  </script>
   <script type="module" src="app.js"></script>
 </body>
 

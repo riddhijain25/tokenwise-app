@@ -9,12 +9,18 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@google-cloud/bigquery": "^9.0.3",
     "express": "^4.21.2",
+    "firebase-admin": "^14.3.0",
     "google-auth-library": "^11.0.2",
     "wink-eng-lite-web-model": "^1.8.1",
     "wink-nlp": "^2.4.0"
   },
   "devDependencies": {
     "vite": "^8.2.2"
+  },
+  "allowScripts": {
+    "@firebase/util@1.15.3": true,
+    "protobufjs@7.6.6": true
   }
 }

@@ -1,132 +1,356 @@
-/* Telemetry capture.
+/* ============================================================
+   TokenWise Telemetry
+   ============================================================
 
-   One record per message sent, not per keystroke — scoring fires
-   continuously and would otherwise produce hundreds of rows for a
-   single prompt.
-
-   Records are written to local storage as a queue. Production will flush
-   that queue to a backend every 60 seconds and clear it only on confirmed
-   receipt, so a failed request retries rather than losing data. The queue
-   structure is here so that change is one function rather than a rewrite.
-
-   org_id, dept_id and user_hash are left null. Those must be attached
-   server-side from a verified identity — anything the browser sends
-   could be edited.
-
-   There is no field capable of holding prompt text. The privacy guarantee
-   is structural, not procedural.
-*/
+   - One record per message sent
+   - Records are queued in localStorage
+   - Queue is flushed by app.js
+   - Records are removed only after successful server receipt
+   - Prompt text is never stored
+   - user_hash is NOT supplied by the browser
+   - org_id / dept_id may be supplied by the browser for testing
+   ============================================================ */
 
 const QUEUE_KEY = 'tokenwise_telemetry';
-const MAX_QUEUE = 500;   // stop unbounded growth if a flush never runs
+const MAX_QUEUE = 500;
+
+
+/* ---------- local queue helpers ---------- */
 
 function read() {
-    try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); }
-    catch (e) { return []; }
+    try {
+        return JSON.parse(
+            localStorage.getItem(QUEUE_KEY) || '[]'
+        );
+    } catch (e) {
+        console.warn('Telemetry read failed:', e);
+        return [];
+    }
 }
 
 function write(records) {
-    try { localStorage.setItem(QUEUE_KEY, JSON.stringify(records)); }
-    catch (e) { console.warn('Telemetry write failed', e); }
+    try {
+        localStorage.setItem(
+            QUEUE_KEY,
+            JSON.stringify(records)
+        );
+    } catch (e) {
+        console.warn('Telemetry write failed:', e);
+    }
 }
 
-// Tracks the prompt currently being composed. Set on first score,
-// cleared once the message is sent.
+
+/* ---------- queue API ---------- */
+
+/*
+ * Returns the current queue.
+ * app.js uses this when flushing telemetry.
+ */
+export function getQueue() {
+    return read();
+}
+
+
+/*
+ * Remove only the records that were included in a
+ * successfully acknowledged batch.
+ *
+ * Example:
+ *
+ * Queue:       A B C D
+ * Sent batch:  A B C
+ * Success:     A B C removed
+ * Remaining:   D
+ */
+export function removeSent(events) {
+    if (!Array.isArray(events) || events.length === 0) {
+        return;
+    }
+
+    const sentIds = new Set(
+        events
+            .map(event => event?.message_id)
+            .filter(Boolean)
+    );
+
+    if (sentIds.size === 0) {
+        return;
+    }
+
+    const currentQueue = read();
+
+    const remaining = currentQueue.filter(
+        record => !sentIds.has(record.message_id)
+    );
+
+    write(remaining);
+}
+
+
+/*
+ * Used for testing/debugging.
+ */
+export function clearQueue() {
+    try {
+        localStorage.removeItem(QUEUE_KEY);
+    } catch (e) {
+        console.warn('Telemetry clear failed:', e);
+    }
+}
+
+
+/* ============================================================
+   Current prompt tracking
+   ============================================================ */
+
 let pending = null;
 
+
+/*
+ * Called when the first score is calculated for a prompt.
+ *
+ * We intentionally keep the FIRST score/token count because
+ * that represents the initial state before optimization.
+ */
 export function beginPrompt(score) {
-    if (pending) return;
-    pending = {
-        message_id: crypto.randomUUID(),
-        started_at: new Date().toISOString(),
-        initial_score: score.scored ? score.score : null,
-        initial_tokens: score.tokens ?? null,
-        initial_issues: score.issues || [],
-        was_optimised: false
-    };
-}
-
-export function markOptimised() {
-    if (pending) pending.was_optimised = true;
-}
-
-export function recordSend(fields) {
-    const record = {
-        ...(pending || {
+    if (!pending) {
+        // Brand new prompt session
+        pending = {
             message_id: crypto.randomUUID(),
             started_at: new Date().toISOString(),
-            initial_score: null,
-            initial_tokens: null,
+            initial_score: score?.scored ? score.score : null,
+            initial_tokens: score?.tokens ?? null,
+            initial_issues: Array.isArray(score?.issues) ? [...score.issues] : [],
             was_optimised: false
-        }),
-        sent_at: new Date().toISOString(),
-        org_id: null,
-        dept_id: null,
-        user_hash: null,
-        is_synthetic: false,
-        factor_version: 'v2026.06',
-        ...fields
+        };
+    } else if (!pending.was_optimised) {
+        // If the user is typing/rewriting back and forth BEFORE optimizing,
+        // keep updating initial_tokens to reflect their latest draft state!
+        pending.initial_score = score?.scored ? score.score : null;
+        pending.initial_tokens = score?.tokens ?? null;
+        pending.initial_issues = Array.isArray(score?.issues) ? [...score.issues] : [];
+    }
+}
+
+
+/*
+ * Called when the user clicks Optimize.
+ */
+export function markOptimised(optimizedScore) {
+    if (pending) {
+        pending.was_optimised = true;
+
+        // Optional: if you want to track what the tokens changed to after optimization
+        if (optimizedScore) {
+            pending.final_tokens = optimizedScore.tokens ?? null;
+            pending.final_score = optimizedScore.scored ? optimizedScore.score : null;
+        }
+    }
+}
+
+
+/*
+ * Create one telemetry record when a message is successfully
+ * sent to the model.
+ */
+export function recordSend(fields = {}) {
+
+    /*
+     * Fallback in case beginPrompt() was not called.
+     */
+    const baseRecord = pending || {
+        message_id: crypto.randomUUID(),
+
+        started_at: new Date().toISOString(),
+
+        initial_score: null,
+
+        initial_tokens: null,
+
+        initial_issues: [],
+
+        was_optimised: false
     };
 
-    const q = read();
-    q.push(record);
-    // Drop oldest first if over cap
-    write(q.length > MAX_QUEUE ? q.slice(-MAX_QUEUE) : q);
 
+    const record = {
+        ...baseRecord,
+        ...fields,
+
+        sent_at:
+            fields.sent_at ||
+            new Date().toISOString(),
+
+        /*
+         * org_id and dept_id can currently be supplied by
+         * the browser during testing.
+         *
+         * user_hash is intentionally NOT created here.
+         * server.js derives it from the authenticated Firebase
+         * user.
+         */
+
+        org_id:
+            fields.org_id ?? null,
+
+        dept_id:
+            fields.dept_id ?? null,
+
+        is_synthetic: false,
+
+        factor_version:
+            fields.factor_version ||
+            'v2026.06'
+    };
+
+
+    /* ---------- add to queue ---------- */
+
+    const queue = read();
+
+    queue.push(record);
+
+
+    /*
+     * Enforce the maximum queue size.
+     *
+     * If there are more than 500 records, retain the newest
+     * 500 records.
+     */
+    const trimmedQueue =
+        queue.length > MAX_QUEUE
+            ? queue.slice(-MAX_QUEUE)
+            : queue;
+
+    write(trimmedQueue);
+
+
+    /*
+     * Prompt has now been recorded.
+     */
     pending = null;
+
     return record;
 }
 
+
+/*
+ * Called when the request fails.
+ *
+ * No telemetry record is created for the failed request.
+ */
 export function discardPending() {
     pending = null;
 }
 
-/* Console helpers for inspection and export */
+
+/* ============================================================
+   Console helpers
+   ============================================================ */
 
 export function installConsoleHelpers() {
+
     window.tokenwise = {
+
+        /*
+         * View queued records:
+         *
+         * tokenwise.all()
+         */
         all: () => read(),
 
+
+        /*
+         * Number of queued records:
+         *
+         * tokenwise.count()
+         */
         count: () => read().length,
 
-        // Newline-delimited JSON, which is what BigQuery ingests
-        ndjson: () => read().map(r => JSON.stringify(r)).join('\n'),
 
+        /*
+         * Export queue as NDJSON:
+         *
+         * tokenwise.ndjson()
+         */
+        ndjson: () =>
+            read()
+                .map(record => JSON.stringify(record))
+                .join('\n'),
+
+
+        /*
+         * Download queued telemetry.
+         */
         download: () => {
-            const blob = new Blob([read().map(r => JSON.stringify(r)).join('\n')],
-                { type: 'application/x-ndjson' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `tokenwise-telemetry-${Date.now()}.ndjson`;
+
+            const data =
+                read()
+                    .map(record => JSON.stringify(record))
+                    .join('\n');
+
+            const blob = new Blob(
+                [data],
+                {
+                    type: 'application/x-ndjson'
+                }
+            );
+
+            const url =
+                URL.createObjectURL(blob);
+
+            const a =
+                document.createElement('a');
+
+            a.href = url;
+            a.download = 'tokenwise-telemetry.ndjson';
+
+            document.body.appendChild(a);
             a.click();
-            URL.revokeObjectURL(a.href);
+            a.remove();
+
+            URL.revokeObjectURL(url);
         },
 
+
+        /*
+         * Basic queue summary.
+         */
         summary: () => {
-            const r = read();
-            if (!r.length) return 'No records';
-            const sum = k => r.reduce((n, x) => n + (x[k] || 0), 0);
-            const byModel = {};
-            r.forEach(x => { byModel[x.model_used] = (byModel[x.model_used] || 0) + 1; });
-            const scored = r.filter(x => x.initial_score !== null && x.final_score !== null);
+
+            const records = read();
+
             return {
-                messages: r.length,
-                tokens_total: sum('tokens_total'),
-                tokens_new: sum('tokens_new'),
-                tokens_history: sum('tokens_history'),
-                tokens_thinking: sum('tokens_thinking'),
-                tokens_out: sum('tokens_out'),
-                no_bound_pct: Math.round(
-                    r.filter(x => x.constraint_present === false).length / r.length * 100),
-                optimised_pct: Math.round(
-                    r.filter(x => x.was_optimised).length / r.length * 100),
-                avg_score_gain: scored.length
-                    ? Math.round(scored.reduce((n, x) => n + (x.final_score - x.initial_score), 0) / scored.length)
-                    : null,
-                by_model: byModel
+                count: records.length,
+
+                optimised:
+                    records.filter(
+                        r => r.was_optimised === true
+                    ).length,
+
+                notOptimised:
+                    records.filter(
+                        r => r.was_optimised !== true
+                    ).length,
+
+                totalTokens:
+                    records.reduce(
+                        (sum, r) =>
+                            sum + (r.tokens_total || 0),
+                        0
+                    )
             };
         },
 
-        clear: () => { localStorage.removeItem(QUEUE_KEY); return 'Cleared'; }
+
+        /*
+         * Testing only:
+         *
+         * tokenwise.clear()
+         */
+        clear: () => {
+            clearQueue();
+            return 'Telemetry queue cleared';
+        }
     };
 }

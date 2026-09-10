@@ -529,3 +529,55 @@ body {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ============================================================
+   User Profile Hover Badge Styles
+   ============================================================ */
+.user-profile-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 6px 10px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s, border-radius 0.2s;
+  margin-right: 12px;
+}
+
+.user-profile-badge:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+.user-avatar-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+/* Tooltip hidden by default, slides down smoothly on badge hover */
+.username-tooltip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  top: 130%;
+  right: 0;
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+  transform: translateY(-4px);
+  z-index: 100;
+}
+
+.user-profile-badge:hover .username-tooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
