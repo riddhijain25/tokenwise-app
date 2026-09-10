@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "gcp-build": "vite build",
     "start": "node server.js"
   },
   "dependencies": {
