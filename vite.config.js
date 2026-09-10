@@ -1,19 +1,26 @@
 import { defineConfig } from 'vite';
+import { resolve } from 'path';
 
 export default defineConfig({
   root: 'src',
   build: {
     outDir: '../public',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: resolve(process.cwd(), 'src/index.html'),
+        login: resolve(process.cwd(), 'src/login.html'),
+      },
+    },
   },
   server: {
     proxy: {
-      '/chat': 'http://localhost:3000',
-      '/models': 'http://localhost:3000',
-      '/update-profile': 'http://localhost:3000',
-      '/get-profile': 'http://localhost:3000',
-      '/get-current-user': 'http://localhost:3000',
-      '/telemetry': 'http://localhost:3000',
+      '^/chat$': { target: 'http://localhost:3000', changeOrigin: true },
+      '^/models$': { target: 'http://localhost:3000', changeOrigin: true },
+      '^/update-profile$': { target: 'http://localhost:3000', changeOrigin: true },
+      '^/get-profile$': { target: 'http://localhost:3000', changeOrigin: true },
+      '^/get-current-user$': { target: 'http://localhost:3000', changeOrigin: true },
+      '^/telemetry$': { target: 'http://localhost:3000', changeOrigin: true },
     },
   },
 });

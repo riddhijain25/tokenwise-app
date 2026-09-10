@@ -13,16 +13,16 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static('src')); // Serves static UI files from src
+app.use(express.static('public')); // Serves static UI files from src
 
 // Serve login page
 app.get('/login.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'src', 'login.html'));
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
 // Serve main app dashboard
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'src', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 const PROJECT_ID = process.env.GCP_PROJECT_ID;
